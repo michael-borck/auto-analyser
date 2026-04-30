@@ -51,6 +51,9 @@ def _cmd_analyse(args) -> None:
     from .router import Router
 
     router = Router()
+    if not args.file.exists():
+        print(f"Error: file not found: {args.file}", file=sys.stderr)
+        sys.exit(1)
     result = router.route(args.file, lens_name=args.lens)
 
     if args.as_json:

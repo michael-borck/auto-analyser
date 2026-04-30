@@ -50,14 +50,15 @@ def load_config() -> FamilyConfig:
 
     # Merge with defaults (file wins over defaults)
     merged = {**_DEFAULTS, **raw.get("lenses", {})}
-    lenses = {
-        name: LensConfig(
+    lenses = {}
+    for name, cfg in merged.items():
+        if "type" not in cfg:
+            raise ValueError(f"Lens '{name}' in config is missing required field 'type'. Must be 'http' or 'cli'.")
+        lenses[name] = LensConfig(
             type=cfg["type"],
             url=cfg.get("url"),
             command=cfg.get("command"),
             formats=cfg.get("formats", []),
         )
-        for name, cfg in merged.items()
-    }
 
     return FamilyConfig(lenses=lenses)

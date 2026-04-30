@@ -23,6 +23,11 @@ class Router:
         if isinstance(file_path, str):
             file_path = Path(file_path)
 
+        if not file_path.exists():
+            return {"success": False, "error": f"File not found: {file_path}", "data": {}}
+        if not file_path.is_file():
+            return {"success": False, "error": f"Not a file: {file_path}", "data": {}}
+
         warning = None
 
         if lens_name is None:
@@ -47,8 +52,12 @@ class Router:
             }
 
         if lens_cfg.type == "cli":
+            if not lens_cfg.command:
+                return {"success": False, "error": f"Lens '{lens_name}' has type=cli but no command configured.", "data": {}}
             result = self._call_cli(lens_cfg.command, file_path)
         elif lens_cfg.type == "http":
+            if not lens_cfg.url:
+                return {"success": False, "error": f"Lens '{lens_name}' has type=http but no url configured.", "data": {}}
             result = self._call_http(lens_cfg.url, file_path)
         else:
             return {"success": False, "error": f"Unknown lens type: {lens_cfg.type}", "data": {}}
@@ -72,7 +81,14 @@ class Router:
                     "error": f"{command} exited with code {proc.returncode}: {proc.stderr}",
                     "data": {},
                 }
-            return json.loads(proc.stdout)
+            try:
+                return json.loads(proc.stdout)
+            except json.JSONDecodeError as e:
+                return {
+                    "success": False,
+                    "error": f"{command} returned invalid JSON: {e}. stdout={proc.stdout[:200]!r}",
+                    "data": {},
+                }
         except FileNotFoundError:
             return {
                 "success": False,
