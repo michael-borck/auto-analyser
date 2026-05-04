@@ -1,0 +1,36 @@
+# poly-lens configuration
+# Copy to ~/.config/poly-lens/config.yaml or ./poly-lens.yaml and adjust.
+#
+# Rate limiting: handled by reverse proxy (nginx, Caddy) for public deployments.
+# Each lens can be run as CLI (default, no server needed) or HTTP (start server first).
+
+lenses:
+  document-lens:
+    type: http
+    url: http://localhost:8000
+
+  # audio-lens: CLI by default (audiolens must be installed).
+  # Switch to http if running: audiolens serve --port 8001
+  audio-lens:
+    type: cli
+    command: audiolens
+  # audio-lens:
+  #   type: http
+  #   url: http://localhost:8001
+
+  # data-lens: CLI by default (datalens must be installed).
+  # Switch to http if running: datalens serve --port 8002
+  data-lens:
+    type: cli
+    command: datalens
+  # data-lens:
+  #   type: http
+  #   url: http://localhost:8002
+
+  code-lens:
+    type: http
+    url: http://localhost:8003
+
+  video-lens:
+    type: cli
+    command: videolens
