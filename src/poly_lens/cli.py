@@ -51,9 +51,6 @@ def _cmd_analyse(args) -> None:
     from .router import Router, RoutingError
 
     router = Router()
-    if not args.file.exists():
-        print(f"Error: file not found: {args.file}", file=sys.stderr)
-        sys.exit(1)
 
     try:
         result = router.route(args.file, lens_name=args.lens)
