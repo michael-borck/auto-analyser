@@ -1,11 +1,11 @@
-"""poly-lens CLI — multi-lens analysis router.
+"""multi-analyser CLI — file analysis router.
 
 Usage:
-  poly-lens analyse report.pdf
-  poly-lens analyse data.csv --lens data-lens
-  poly-lens analyse recording.mp3 --json
-  poly-lens detect notebook.ipynb
-  poly-lens status
+  multi-analyser report.pdf
+  multi-analyser data.csv --analyser records-analyser
+  multi-analyser recording.mp3 --json
+  multi-analyser detect notebook.ipynb
+  multi-analyser status
 """
 
 import json
@@ -18,15 +18,15 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="poly-lens",
-        description="Route files to the right analysis lens",
+        prog="multi-analyser",
+        description="Route files to the right analyser",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # poly-lens analyse
+    # multi-analyser FILE (default analyse)
     analyse = sub.add_parser("analyse", help="Analyse a file")
     analyse.add_argument("file", type=Path, help="File to analyse")
-    analyse.add_argument("--lens", help="Force a specific lens (e.g. document-lens)")
+    analyse.add_argument("--analyser", help="Force a specific analyser (e.g. speech-analyser)")
     analyse.add_argument("--json", action="store_true", dest="as_json",
                          help="Output raw JSON")
 

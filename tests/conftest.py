@@ -1,4 +1,4 @@
-"""Shared fixtures for prism tests."""
+"""Shared fixtures for poly-lens tests."""
 
 from pathlib import Path
 

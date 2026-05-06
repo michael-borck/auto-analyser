@@ -1,15 +1,14 @@
-"""prism CLI — multi-lens analysis router.
+"""auto-analyser CLI — file analysis router.
 
 Usage:
-  prism analyse report.pdf
-  prism analyse data.csv --lens data-lens
-  prism analyse recording.mp3 --json
-  prism detect notebook.ipynb
-  prism status
+  auto-analyser report.pdf
+  auto-analyser data.csv --analyser records-analyser
+  auto-analyser recording.mp3 --json
+  auto-analyser detect notebook.ipynb
+  auto-analyser status
 """
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -18,24 +17,20 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="prism",
-        description="Route files to the right analysis lens",
+        prog="auto-analyser",
+        description="Route files to the right analyser",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # prism analyse
     analyse = sub.add_parser("analyse", help="Analyse a file")
     analyse.add_argument("file", type=Path, help="File to analyse")
-    analyse.add_argument("--lens", help="Force a specific lens (e.g. document-lens)")
-    analyse.add_argument("--json", action="store_true", dest="as_json",
-                         help="Output raw JSON")
+    analyse.add_argument("--analyser", help="Force a specific analyser (e.g. code-analyser)")
+    analyse.add_argument("--json", action="store_true", dest="as_json", help="Output raw JSON")
 
-    # prism detect
-    detect_cmd = sub.add_parser("detect", help="Show which lens would handle a file")
+    detect_cmd = sub.add_parser("detect", help="Show which analyser would handle a file")
     detect_cmd.add_argument("file", type=Path)
 
-    # prism status
-    sub.add_parser("status", help="Show configured lenses and whether they are reachable")
+    sub.add_parser("status", help="Show configured analysers and whether they are reachable")
 
     args = parser.parse_args()
 
@@ -48,33 +43,30 @@ def main() -> None:
 
 
 def _cmd_analyse(args) -> None:
-    from .router import Router
+    from .router import Router, RoutingError
 
     router = Router()
-    if not args.file.exists():
-        print(f"Error: file not found: {args.file}", file=sys.stderr)
+
+    try:
+        result = router.route(args.file, analyser_name=args.analyser)
+    except RoutingError as e:
+        if args.as_json:
+            print(json.dumps({"error": str(e)}, indent=2, default=str), file=sys.stderr)
+        else:
+            print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-    result = router.route(args.file, lens_name=args.lens)
 
     if args.as_json:
-        if not result["success"]:
-            print(json.dumps(result, indent=2, default=str), file=sys.stderr)
-            sys.exit(1)
         print(json.dumps(result, indent=2, default=str))
         return
 
     if result.get("warning"):
         print(f"Note: {result['warning']}\n")
 
-    if not result["success"]:
-        print(f"Error: {result['error']}", file=sys.stderr)
-        sys.exit(1)
-
     print(f"Routed to:  {result.get('routed_to', 'unknown')}")
-    print(f"Success:    {result['success']}")
     print()
     print("Full result (use --json for machine-readable output):")
-    _print_summary(result.get("data", {}))
+    _print_summary({k: v for k, v in result.items() if k not in ("routed_to", "warning")})
 
 
 def _cmd_detect(args) -> None:
@@ -83,10 +75,10 @@ def _cmd_detect(args) -> None:
     result = detect(args.file)
     if result.warning:
         print(f"Note: {result.warning}")
-    if result.lens:
-        print(f"{args.file.name} -> {result.lens}")
+    if result.analyser:
+        print(f"{args.file.name} -> {result.analyser}")
     else:
-        print(f"{args.file.name} -> unknown (no lens configured for {result.extension})")
+        print(f"{args.file.name} -> unknown (no analyser configured for {result.extension})")
         sys.exit(1)
 
 
@@ -95,28 +87,26 @@ def _cmd_status() -> None:
     import httpx
 
     config = load_config()
-    print("Configured lenses:\n")
+    print("Configured analysers:\n")
 
-    for name, lens in config.lenses.items():
-        if lens.type == "http":
+    for name, cfg in config.analysers.items():
+        if cfg.type == "http":
             try:
-                httpx.get(f"{lens.url}/health", timeout=3).raise_for_status()
+                httpx.get(f"{cfg.url}/health", timeout=3).raise_for_status()
                 status = "reachable"
             except Exception:
                 status = "not reachable"
-            print(f"  {name:<20} http  {lens.url}  {status}")
+            print(f"  {name:<22} http  {cfg.url}  {status}")
         else:
+            import subprocess
             try:
-                subprocess.run(
-                    [lens.command, "--version"],
-                    capture_output=True, timeout=5
-                )
+                subprocess.run([cfg.command, "--version"], capture_output=True, timeout=5)
                 status = "installed"
             except FileNotFoundError:
                 status = "not found"
             except subprocess.TimeoutExpired:
                 status = "installed (timeout on --version)"
-            print(f"  {name:<20} cli   {lens.command}  {status}")
+            print(f"  {name:<22} cli   {cfg.command}  {status}")
 
 
 def _print_summary(data: dict) -> None:
@@ -129,3 +119,7 @@ def _print_summary(data: dict) -> None:
             print(f"  {key}: [{len(value)} items]")
         else:
             print(f"  {key}: {value}")
+
+
+if __name__ == "__main__":
+    main()

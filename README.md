@@ -1,102 +1,83 @@
-# prism
+# multi-analyser
 
-A meta-router that detects a file's format and sends it to the right analysis lens.
+Routes any file to the right analyser. Detects the file format, calls the appropriate tool, and returns the result — so you don't need to know which analyser handles which format.
 
-Instead of remembering which tool handles which file type, you run `prism analyse <file>` and prism figures out the rest — routing PDFs to [document-lens](https://github.com/michael-borck/document-lens), audio to [audio-lens](https://github.com/michael-borck/audio-lens), spreadsheets to [data-lens](https://github.com/michael-borck/data-lens), and code to code-lens.
+Part of the [analyser family](#the-analyser-family).
 
 ## Install
 
 ```bash
-pip install prism
+pip install multi-analyser
 ```
 
-Requires Python 3.11+. Install the lenses you want to use separately.
+Requires Python 3.11+. The analysers it calls must be installed and reachable separately.
 
 ## Usage
 
+### CLI
+
 ```bash
-# Detect which lens handles a file (no analysis, no network calls)
-prism detect report.pdf          # report.pdf -> document-lens
-prism detect data.json           # Note: may be config data...  data.json -> data-lens
-prism detect notebook.ipynb      # Note: contains code and prose...  notebook.ipynb -> code-lens
+# Detect which analyser would handle a file
+multi-analyser detect report.pdf       # report.pdf -> document-analyser
+multi-analyser detect interview.mp3    # interview.mp3 -> speech-analyser
+multi-analyser detect data.xlsx        # data.xlsx -> records-analyser
 
-# Analyse a file (routes to the right lens automatically)
-prism analyse report.pdf
-prism analyse recording.mp3 --json
+# Analyse a file — auto-detects format and routes
+multi-analyser analyse report.pdf
+multi-analyser analyse recording.mp3 --json
 
-# Force a specific lens
-prism analyse data.json --lens document-lens
+# Force a specific analyser
+multi-analyser analyse interview.mp4 --analyser speech-analyser
 
-# Check which lenses are installed / reachable
-prism status
+# Check which analysers are reachable
+multi-analyser status
 ```
 
 ### Python
 
 ```python
-from prism import Router
+from poly_lens import Router
 
 router = Router()
 result = router.route("report.pdf")
-
-print(result["routed_to"])   # "document-lens"
-print(result["success"])     # True
+print(result["routed_to"])   # "document-analyser"
 ```
-
-## Supported lenses
-
-| Lens | Type | Handles |
-|------|------|---------|
-| document-lens | HTTP service | `.pdf` `.docx` `.pptx` `.txt` `.md` `.qmd` `.rst` |
-| audio-lens | CLI | `.mp3` `.wav` `.m4a` `.ogg` `.flac` `.aac` `.opus` |
-| data-lens | CLI | `.csv` `.tsv` `.xlsx` `.xls` `.json` `.yaml` `.xml` `.sqlite` `.db` `.parquet` |
-| code-lens | HTTP service | `.py` `.js` `.ts` `.tsx` `.html` `.css` `.ipynb` and more |
-| video-lens | CLI | `.mp4` `.mov` `.avi` `.webm` `.mkv` |
 
 ## Configuration
 
-prism ships with built-in defaults (document-lens on `localhost:8000`, audio-lens via CLI, etc.). Override with a config file:
-
-```bash
-# Project-local (checked first)
-./prism.yaml
-
-# User-global
-~/.config/prism/config.yaml
-```
-
-Copy `lens-family.example.yaml` from this repo as a starting point.
+multi-analyser ships with built-in defaults (document-analyser on `localhost:8000`, speech-analyser via CLI, etc.). Override with a YAML config file at `./multi-analyser.yaml` or `~/.config/multi-analyser/config.yaml`:
 
 ```yaml
 lenses:
-  document-lens:
+  document-analyser:
     type: http
     url: http://localhost:8000
+    extensions: [.pdf, .docx, .pptx, .txt, .md]
 
-  audio-lens:
+  speech-analyser:
     type: cli
-    command: audio-lens
+    command: speech-analyser
+    extensions: [.mp3, .wav, .m4a, .ogg, .flac, .mp4, .mov]
 
-  data-lens:
-    type: cli
-    command: data-lens
+  records-analyser:
+    type: http
+    url: http://localhost:8003
+    extensions: [.csv, .tsv, .xlsx, .parquet, .db, .sqlite]
 ```
 
-## Ambiguous formats
+## The analyser family
 
-Some formats are handled by more than one lens depending on intent:
+Low-level analysis tools. Each accepts files directly and returns structured JSON. Build your own UI or pipeline on top.
 
-- **JSON / YAML / XML** — routed to data-lens by default; a warning is shown if the file looks like configuration data rather than a dataset. Use `--lens document-lens` to treat it as prose.
-- **`.ipynb` / `.qmd`** — routed to code-lens (code analysis); pass extracted prose to document-lens separately for writing quality analysis.
-- **`.html`** — routed to code-lens; use `--lens document-lens` to treat it as content.
+| Package | Handles |
+|---|---|
+| [speech-analyser](https://github.com/michael-borck/speech-analyser) | audio and video files — transcript and speech metrics |
+| [video-analyser](https://github.com/michael-borck/video-analyser) | video files — frames, scenes, and visual quality |
+| [document-analyser](https://github.com/michael-borck/document-analyser) | PDF, DOCX, PPTX, TXT — text and readability |
+| [code-analyser](https://github.com/michael-borck/code-analyser) | source code — style, complexity, and quality metrics |
+| [records-analyser](https://github.com/michael-borck/records-analyser) | CSV, Excel, SQLite, Parquet, JSON — data profiling |
+| [multi-analyser](https://github.com/michael-borck/multi-analyser) | any file — detects format and routes to the right tool |
 
-## Part of the prism family
-
-- [document-lens](https://github.com/michael-borck/document-lens) — PDFs, DOCX, PPTX, Markdown
-- [data-lens](https://github.com/michael-borck/data-lens) — CSV, XLSX, SQLite, JSON, YAML
-- [audio-lens](https://github.com/michael-borck/audio-lens) — audio transcription and speech metrics
-- [prism](https://github.com/michael-borck/prism) — meta-router: detects format and calls the right lens
-
-## License
+## Licence
 
 MIT

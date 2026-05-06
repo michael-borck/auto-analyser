@@ -70,7 +70,7 @@ _ROUTES: dict[str, str] = {
 
 _AMBIGUOUS_WARNING = (
     "{ext} files may be configuration data or structured datasets. "
-    "prism is routing to data-lens. For prose content, use document-lens directly."
+    "poly-lens is routing to data-lens. For prose content, use document-lens directly."
 )
 
 _NOTEBOOK_WARNING = (
@@ -93,8 +93,8 @@ def detect(file_path: Path) -> DetectionResult:
     elif lens is None:
         warning = (
             f"Unknown format: {ext}. "
-            f"prism does not know which lens handles this file. "
-            f"Use a lens directly or add a mapping to your prism.yaml."
+            f"poly-lens does not know which lens handles this file. "
+            f"Use a lens directly or add a mapping to your poly-lens.yaml."
         )
 
     return DetectionResult(lens=lens, extension=ext, warning=warning)
