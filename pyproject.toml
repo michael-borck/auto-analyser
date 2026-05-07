@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "auto-analyser"
-version = "0.2.0"
+version = "0.2.1"
 description = "Auto-analyser — detect a file's format and route it to the right analyser family member"
 requires-python = ">=3.11"
 dependencies = [

@@ -1,4 +1,4 @@
-"""Shared fixtures for poly-lens tests."""
+"""Shared fixtures for auto-analyser tests."""
 
 from pathlib import Path
 
