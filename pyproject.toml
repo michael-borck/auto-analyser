@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "auto-analyser"
-version = "0.2.1"
+version = "0.2.2"
 description = "Auto-analyser — detect a file's format and route it to the right analyser family member"
 requires-python = ">=3.11"
 dependencies = [
@@ -29,3 +29,7 @@ packages = ["src/auto_analyser"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: tests that load real models or make network calls — opt-in with `pytest -m slow`",
+]

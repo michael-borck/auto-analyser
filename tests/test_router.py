@@ -49,6 +49,15 @@ class TestRouterCLI:
             with pytest.raises(RoutingError, match="Unsupported format"):
                 router.route(sample_csv, analyser_name="records-analyser")
 
+    def test_cli_tool_not_installed_raises_helpful_error(self, sample_csv: Path):
+        """When the CLI binary isn't on PATH, surface a helpful 'is it installed?' error."""
+        cfg = _make_config("records-analyser", "cli", command="records-analyser")
+        router = Router(config=cfg)
+
+        with patch("subprocess.run", side_effect=FileNotFoundError("no such command")):
+            with pytest.raises(RoutingError, match="not found"):
+                router.route(sample_csv, analyser_name="records-analyser")
+
     def test_unknown_analyser_raises_routing_error(self, sample_csv: Path):
         cfg = FamilyConfig(analysers={})
         router = Router(config=cfg)

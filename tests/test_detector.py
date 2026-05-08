@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from auto_analyser.detector import detect, DetectionResult
 
 
@@ -37,12 +35,17 @@ class TestDetect:
         result = detect(Path("data.json"))
         assert result.analyser == "records-analyser"
         assert result.warning is not None
-        assert "records-analyser" in result.warning or "document-analyser" in result.warning
+        # Both names must appear: the ambiguous-data warning routes to
+        # records-analyser but points at document-analyser as the alternative.
+        assert "routing to records-analyser" in result.warning
+        assert "document-analyser" in result.warning
 
     def test_ipynb_routes_to_code_analyser_with_warning(self):
         result = detect(Path("notebook.ipynb"))
         assert result.analyser == "code-analyser"
         assert result.warning is not None
+        # Discriminate notebook warning from ambiguous-data warning.
+        assert "code cells" in result.warning
 
     def test_html_routes_to_code_analyser(self):
         result = detect(Path("index.html"))
