@@ -17,7 +17,7 @@ wheels = [
 
 [[package]]
 name = "auto-analyser"
-version = "0.2.2"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
