@@ -2,7 +2,7 @@
 
 Routes any file to the right analyser. Detects the file format, calls the appropriate tool, and returns the result — so you don't need to know which analyser handles which format.
 
-Part of the [analyser family](#the-analyser-family).
+Part of the [analyser family](https://github.com/michael-borck/lens-analysers).
 
 ## Install
 
