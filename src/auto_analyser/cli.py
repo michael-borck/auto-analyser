@@ -32,6 +32,8 @@ def main() -> None:
 
     sub.add_parser("status", help="Show configured analysers and whether they are reachable")
 
+    sub.add_parser("manifest", help="Print the capability manifest as JSON")
+
     args = parser.parse_args()
 
     if args.command == "analyse":
@@ -40,6 +42,9 @@ def main() -> None:
         _cmd_detect(args)
     elif args.command == "status":
         _cmd_status()
+    elif args.command == "manifest":
+        from .manifest import MANIFEST
+        print(json.dumps(MANIFEST, indent=2))
 
 
 def _cmd_analyse(args) -> None:
