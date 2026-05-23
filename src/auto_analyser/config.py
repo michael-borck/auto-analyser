@@ -31,6 +31,10 @@ _DEFAULTS: dict[str, dict] = {
     "records-analyser":   {"type": "http", "url": "http://localhost:8003"},
     "code-analyser":      {"type": "http", "url": "http://localhost:8004"},
     "wordpress-analyser": {"type": "http", "url": "http://localhost:8005"},
+    "image-analyser":     {"type": "http", "url": "http://localhost:8006"},
+    "git-analyser":       {"type": "http", "url": "http://localhost:8007"},
+    "bundle-analyser":    {"type": "http", "url": "http://localhost:8008"},
+    "conversation-analyser": {"type": "http", "url": "http://localhost:8009"},
 }
 
 _CONFIG_PATHS = [

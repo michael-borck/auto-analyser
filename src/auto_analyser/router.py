@@ -18,6 +18,15 @@ class Router:
 
     def __init__(self, config: FamilyConfig | None = None) -> None:
         self._config = config or load_config()
+        self._routes: dict[str, str] | None = None
+
+    def _get_routes(self) -> dict[str, str]:
+        """Manifest-derived routing table (falls back to static _ROUTES), cached."""
+        if self._routes is None:
+            from .detector import resolve_routes
+
+            self._routes = resolve_routes(self._config)
+        return self._routes
 
     def route(
         self,
@@ -43,7 +52,7 @@ class Router:
         warning = None
 
         if analyser_name is None:
-            detection = detect(file_path)
+            detection = detect(file_path, routes=self._get_routes())
             if detection.analyser is None:
                 raise RoutingError(
                     f"Unknown format: {file_path.suffix}. "

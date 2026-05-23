@@ -31,6 +31,10 @@ class TestDetect:
         result = detect(Path("functions.php"))
         assert result.analyser == "wordpress-analyser"
 
+    def test_png_routes_to_image_analyser(self):
+        result = detect(Path("photo.png"))
+        assert result.analyser == "image-analyser"
+
     def test_json_has_warning(self):
         result = detect(Path("data.json"))
         assert result.analyser == "records-analyser"

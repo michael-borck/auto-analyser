@@ -60,6 +60,15 @@ _ROUTES: dict[str, str] = {
     ".mkv": "video-analyser",
     # wordpress-analyser
     ".php": "wordpress-analyser",
+    # image-analyser
+    ".png": "image-analyser",
+    ".jpg": "image-analyser",
+    ".jpeg": "image-analyser",
+    ".gif": "image-analyser",
+    ".bmp": "image-analyser",
+    ".tiff": "image-analyser",
+    ".tif": "image-analyser",
+    ".webp": "image-analyser",
 }
 
 _AMBIGUOUS_WARNING = (
@@ -75,10 +84,26 @@ _NOTEBOOK_WARNING = (
 )
 
 
-def detect(file_path: Path) -> DetectionResult:
-    """Detect which analyser should handle this file."""
+def resolve_routes(config) -> dict[str, str]:
+    """Merge the static fallback with live manifest-derived routes (manifests win).
+
+    When manifests can't be fetched (offline / services down), this is just
+    _ROUTES, so detection behaviour is unchanged.
+    """
+    from .manifests import build_routes
+
+    return {**_ROUTES, **build_routes(config)}
+
+
+def detect(file_path: Path, routes: dict[str, str] | None = None) -> DetectionResult:
+    """Detect which analyser should handle this file.
+
+    `routes` is the extension->analyser table; defaults to the static _ROUTES
+    fallback. The Router passes a manifest-derived table via resolve_routes().
+    """
     ext = file_path.suffix.lower()
-    analyser = _ROUTES.get(ext)
+    table = _ROUTES if routes is None else routes
+    analyser = table.get(ext)
 
     warning = None
     if ext in {".json", ".yaml", ".yml", ".xml"}:
