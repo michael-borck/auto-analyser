@@ -65,6 +65,19 @@ lenses:
     extensions: [.csv, .tsv, .xlsx, .parquet, .db, .sqlite]
 ```
 
+## How routing works
+
+auto-analyser builds its routing table from each analyser's **capability manifest**
+(`GET /manifest` for HTTP analysers, or `<analyser> manifest` for CLI ones), which
+declares the extensions it handles and whether it is auto-routable. Analysers that
+are explicit-only *content interpretations* — e.g. `conversation-analyser` — set
+`auto_routable: false` and are never auto-routed; invoke them directly.
+
+A built-in static map (`detector._ROUTES`) is kept as an **offline fallback**: when
+an analyser can't be reached for its manifest, routing still resolves, so you get a
+clear "is the service running? / is it installed?" message at dispatch instead of a
+misleading "unknown format". See [`docs/adr/0001-manifest-driven-routing.md`](docs/adr/0001-manifest-driven-routing.md).
+
 ## The analyser family
 
 Low-level analysis tools. Each accepts files directly and returns structured JSON. Build your own UI or pipeline on top.
@@ -76,6 +89,11 @@ Low-level analysis tools. Each accepts files directly and returns structured JSO
 | [document-analyser](https://github.com/michael-borck/document-analyser) | PDF, DOCX, PPTX, TXT — text and readability |
 | [code-analyser](https://github.com/michael-borck/code-analyser) | source code — style, complexity, and quality metrics |
 | [records-analyser](https://github.com/michael-borck/records-analyser) | CSV, Excel, SQLite, Parquet, JSON — data profiling |
+| [image-analyser](https://github.com/michael-borck/image-analyser) | images — metadata, quality, OCR, captions, barcodes |
+| [git-analyser](https://github.com/michael-borck/git-analyser) | git repositories — commit history and churn signals |
+| [wordpress-analyser](https://github.com/michael-borck/wordpress-analyser) | WordPress PHP — hooks, API usage, quality signals |
+| [bundle-analyser](https://github.com/michael-borck/bundle-analyser) | folders and zips — analyse a collection of files |
+| [conversation-analyser](https://github.com/michael-borck/conversation-analyser) | human-AI conversations — engagement and critical-thinking |
 | [auto-analyser](https://github.com/michael-borck/auto-analyser) | any file — detects format and routes to the right tool |
 
 ## Licence
