@@ -6,6 +6,8 @@ Usage:
   auto-analyser recording.mp3 --json
   auto-analyser detect notebook.ipynb
   auto-analyser status
+  auto-analyser serve
+  auto-analyser manifest
 """
 
 import json
@@ -16,35 +18,45 @@ from pathlib import Path
 def main() -> None:
     import argparse
 
+    from lens_contract import run_contract_subcommands
+
+    from .manifest import MANIFEST
+
+    # `serve` and `manifest` are the family's shared subcommands (lens-contract).
+    if run_contract_subcommands(
+        MANIFEST,
+        app_path="auto_analyser.api:app",
+        default_port=8010,
+        env_prefix="AUTO_ANALYSER",
+    ):
+        return
+
+    argv = sys.argv[1:]
+
+    # Orchestrator-specific subcommands.
+    if argv and argv[0] == "detect":
+        p = argparse.ArgumentParser(prog="auto-analyser detect")
+        p.add_argument("file", type=Path, help="File to inspect")
+        _cmd_detect(p.parse_args(argv[1:]))
+        return
+    if argv and argv[0] == "status":
+        _cmd_status()
+        return
+
+    # Default command: analyse (bare positional). Also accept an explicit leading
+    # `analyse` token — bundle-analyser invokes `auto-analyser analyse <file> --json`.
+    if argv and argv[0] == "analyse":
+        argv = argv[1:]
+
     parser = argparse.ArgumentParser(
         prog="auto-analyser",
-        description="Route files to the right analyser",
+        description="Route a file to the right analyser and return its analysis",
+        epilog="subcommands: `serve`, `manifest`, `detect`, `status`",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    analyse = sub.add_parser("analyse", help="Analyse a file")
-    analyse.add_argument("file", type=Path, help="File to analyse")
-    analyse.add_argument("--analyser", help="Force a specific analyser (e.g. code-analyser)")
-    analyse.add_argument("--json", action="store_true", dest="as_json", help="Output raw JSON")
-
-    detect_cmd = sub.add_parser("detect", help="Show which analyser would handle a file")
-    detect_cmd.add_argument("file", type=Path)
-
-    sub.add_parser("status", help="Show configured analysers and whether they are reachable")
-
-    sub.add_parser("manifest", help="Print the capability manifest as JSON")
-
-    args = parser.parse_args()
-
-    if args.command == "analyse":
-        _cmd_analyse(args)
-    elif args.command == "detect":
-        _cmd_detect(args)
-    elif args.command == "status":
-        _cmd_status()
-    elif args.command == "manifest":
-        from .manifest import MANIFEST
-        print(json.dumps(MANIFEST, indent=2))
+    parser.add_argument("file", type=Path, help="File to analyse")
+    parser.add_argument("--analyser", help="Force a specific analyser (e.g. code-analyser)")
+    parser.add_argument("--json", action="store_true", dest="as_json", help="Output raw JSON")
+    _cmd_analyse(parser.parse_args(argv))
 
 
 def _cmd_analyse(args) -> None:
