@@ -38,6 +38,7 @@ _DEFAULTS: dict[str, dict] = {
     "spreadsheet-analyser":  {"type": "http", "url": "http://localhost:8011"},
     "site-analyser":         {"type": "http", "url": "http://localhost:8012"},
     "diagram-analyser":      {"type": "http", "url": "http://localhost:8013"},
+    "provenance-analyser":   {"type": "http", "url": "http://localhost:8014"},
     # TypeScript member (cite-sight-server); explicit-only, default port 3001.
     "cite-sight":            {"type": "http", "url": "http://localhost:3001"},
 }
