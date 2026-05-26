@@ -55,6 +55,12 @@ def main() -> None:
     )
     parser.add_argument("file", type=Path, help="File to analyse")
     parser.add_argument("--analyser", help="Force a specific analyser (e.g. code-analyser)")
+    parser.add_argument(
+        "--no-cascade",
+        dest="cascade",
+        action="store_false",
+        help="Disable cascade routing (e.g. image-analyser → diagram-analyser when is_diagram=True)",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json", help="Output raw JSON")
     _cmd_analyse(parser.parse_args(argv))
 
@@ -65,7 +71,7 @@ def _cmd_analyse(args) -> None:
     router = Router()
 
     try:
-        result = router.route(args.file, analyser_name=args.analyser)
+        result = router.route(args.file, analyser_name=args.analyser, cascade=args.cascade)
     except RoutingError as e:
         if args.as_json:
             print(json.dumps({"error": str(e)}, indent=2, default=str), file=sys.stderr)
@@ -81,9 +87,15 @@ def _cmd_analyse(args) -> None:
         print(f"Note: {result['warning']}\n")
 
     print(f"Routed to:  {result.get('routed_to', 'unknown')}")
+    if "cascade" in result:
+        casc = result["cascade"]
+        if "error" in casc:
+            print(f"Cascade:    {casc['routed_to']} (triggered by {casc.get('triggered_by','?')}) — failed: {casc['error']}")
+        else:
+            print(f"Cascade:    {casc['routed_to']} (triggered by {casc.get('triggered_by','?')})")
     print()
     print("Full result (use --json for machine-readable output):")
-    _print_summary({k: v for k, v in result.items() if k not in ("routed_to", "warning")})
+    _print_summary({k: v for k, v in result.items() if k not in ("routed_to", "warning", "cascade")})
 
 
 def _cmd_detect(args) -> None:

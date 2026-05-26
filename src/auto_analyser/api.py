@@ -25,8 +25,16 @@ _router = Router()
 
 
 @app.post("/analyse")
-async def analyse(file: UploadFile = File(...)) -> dict[str, Any]:
-    """Route an uploaded file to the right analyser and return its result."""
+async def analyse(
+    file: UploadFile = File(...),
+    cascade: bool = True,
+) -> dict[str, Any]:
+    """Route an uploaded file to the right analyser and return its result.
+
+    `cascade=true` (default) enables downstream cascade routing — e.g. an image
+    classified by image-analyser as `diagram.is_diagram=True` is also forwarded
+    to diagram-analyser and the result attached under the `cascade` key.
+    """
     content = await file.read()
     if not content:
         raise HTTPException(status_code=422, detail="Empty file")
@@ -35,7 +43,7 @@ async def analyse(file: UploadFile = File(...)) -> dict[str, Any]:
     # is what lets the router pick the right downstream analyser.
     with upload_tempfile(content, file.filename) as tmp_path:
         try:
-            return _router.route(tmp_path)
+            return _router.route(tmp_path, cascade=cascade)
         except RoutingError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:  # noqa: BLE001

@@ -69,6 +69,15 @@ _ROUTES: dict[str, str] = {
     ".tiff": "image-analyser",
     ".tif": "image-analyser",
     ".webp": "image-analyser",
+    # diagram-analyser (text formats only; image diagrams go to image-analyser →
+    # cascade to diagram-analyser when is_diagram=True)
+    ".mmd": "diagram-analyser",
+    ".mermaid": "diagram-analyser",
+    ".puml": "diagram-analyser",
+    ".plantuml": "diagram-analyser",
+    ".dot": "diagram-analyser",
+    ".gv": "diagram-analyser",
+    ".drawio": "diagram-analyser",
 }
 
 _AMBIGUOUS_WARNING = (

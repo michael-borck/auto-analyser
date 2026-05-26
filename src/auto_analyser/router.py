@@ -13,12 +13,38 @@ class RoutingError(Exception):
     """Raised when auto-analyser cannot route or analyse a file."""
 
 
+# Cascade rules — when this primary analyser returns a result whose
+# `<field>` path satisfies `<predicate>`, also invoke the cascaded member.
+# v1 has exactly one rule (image-analyser → diagram-analyser); easy to extend.
+_CASCADE_RULES: list[dict] = [
+    {
+        "primary": "image-analyser",
+        "trigger_path": ("diagram", "is_diagram"),
+        "predicate": lambda v: bool(v),
+        "cascade_to": "diagram-analyser",
+    },
+]
+
+
+def _get_path(data: dict, path: tuple[str, ...]):
+    """Walk a dotted path through nested dicts; return None if any hop is missing."""
+    cur = data
+    for key in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(key)
+        if cur is None:
+            return None
+    return cur
+
+
 class Router:
     """Routes a file to the appropriate analyser and returns the analysis."""
 
-    def __init__(self, config: FamilyConfig | None = None) -> None:
+    def __init__(self, config: FamilyConfig | None = None, *, cascade: bool = True) -> None:
         self._config = config or load_config()
         self._routes: dict[str, str] | None = None
+        self._cascade_default = cascade
 
     def _get_routes(self) -> dict[str, str]:
         """Manifest-derived routing table (falls back to static _ROUTES), cached."""
@@ -32,14 +58,20 @@ class Router:
         self,
         file_path: "Path | str",
         analyser_name: str | None = None,
+        *,
+        cascade: bool | None = None,
     ) -> dict[str, Any]:
         """Analyse a file by routing to the appropriate analyser.
 
-        Returns the analysis dict with a 'routed_to' key injected.
+        Returns the analysis dict with a 'routed_to' key injected. When
+        cascade is True (default), a configured downstream analyser whose
+        trigger predicate matches the primary result is also invoked and its
+        result attached under a `cascade` key (never raises — failures land
+        in `cascade.error`).
 
         Raises:
             RoutingError: if the file is missing, format unknown, analyser not
-                          configured, or the analyser returns an error.
+                          configured, or the primary analyser returns an error.
         """
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -86,7 +118,57 @@ class Router:
         data["routed_to"] = analyser_name
         if warning:
             data["warning"] = warning
+
+        if (cascade if cascade is not None else self._cascade_default):
+            cascade_result = self._maybe_cascade(analyser_name, data, file_path)
+            if cascade_result is not None:
+                data["cascade"] = cascade_result
+
         return data
+
+    def _maybe_cascade(
+        self,
+        primary_name: str,
+        primary_data: dict[str, Any],
+        file_path: Path,
+    ) -> dict[str, Any] | None:
+        """Apply the first matching cascade rule. Returns the cascade block, or None.
+
+        Never raises — a failed cascade is reported, not propagated, so the
+        primary result is always preserved.
+        """
+        for rule in _CASCADE_RULES:
+            if rule["primary"] != primary_name:
+                continue
+            trigger_value = _get_path(primary_data, rule["trigger_path"])
+            if not rule["predicate"](trigger_value):
+                continue
+            cascade_to = rule["cascade_to"]
+            block: dict[str, Any] = {
+                "triggered_by": f"{rule['primary']}." + ".".join(rule["trigger_path"]),
+                "routed_to": cascade_to,
+            }
+            target_cfg = self._config.get(cascade_to)
+            if target_cfg is None:
+                block["error"] = f"cascade target {cascade_to!r} is not configured"
+                return block
+            try:
+                if target_cfg.type == "cli":
+                    if not target_cfg.command:
+                        block["error"] = f"{cascade_to} has type=cli but no command configured"
+                        return block
+                    block["result"] = self._call_cli(target_cfg.command, file_path)
+                elif target_cfg.type == "http":
+                    if not target_cfg.url:
+                        block["error"] = f"{cascade_to} has type=http but no url configured"
+                        return block
+                    block["result"] = self._call_http(target_cfg.url, file_path)
+                else:
+                    block["error"] = f"unknown analyser type: {target_cfg.type}"
+            except RoutingError as e:
+                block["error"] = str(e)
+            return block
+        return None
 
     def _call_cli(self, command: str, file_path: Path) -> dict[str, Any]:
         try:

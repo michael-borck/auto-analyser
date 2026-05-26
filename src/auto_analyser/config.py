@@ -35,6 +35,9 @@ _DEFAULTS: dict[str, dict] = {
     "git-analyser":       {"type": "http", "url": "http://localhost:8007"},
     "bundle-analyser":    {"type": "http", "url": "http://localhost:8008"},
     "conversation-analyser": {"type": "http", "url": "http://localhost:8009"},
+    "spreadsheet-analyser":  {"type": "http", "url": "http://localhost:8011"},
+    "site-analyser":         {"type": "http", "url": "http://localhost:8012"},
+    "diagram-analyser":      {"type": "http", "url": "http://localhost:8013"},
     # TypeScript member (cite-sight-server); explicit-only, default port 3001.
     "cite-sight":            {"type": "http", "url": "http://localhost:3001"},
 }
