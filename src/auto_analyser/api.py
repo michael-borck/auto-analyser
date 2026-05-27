@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from lens_contract import add_contract_routes, add_cors, upload_tempfile
 
 from .manifest import MANIFEST
-from .router import Router, RoutingError
+from .router import Router, RoutingError, list_presets
 
 app = FastAPI(title="auto-analyser", version=MANIFEST["version"])
 
@@ -28,12 +28,16 @@ _router = Router()
 async def analyse(
     file: UploadFile = File(...),
     cascade: bool = True,
+    preset: str | None = None,
 ) -> dict[str, Any]:
     """Route an uploaded file to the right analyser and return its result.
 
-    `cascade=true` (default) enables downstream cascade routing — e.g. an image
-    classified by image-analyser as `diagram.is_diagram=True` is also forwarded
-    to diagram-analyser and the result attached under the `cascade` key.
+    Three modes (in precedence order):
+    1. `preset=<name>` — invoke a named bundle (see GET /presets), aggregate.
+       `cascade` is ignored in this mode (off inside presets by design).
+    2. Default — auto-detect format, route to one member, optionally cascade
+       to a downstream member when the primary result satisfies a cascade
+       rule's trigger.
     """
     content = await file.read()
     if not content:
@@ -43,8 +47,16 @@ async def analyse(
     # is what lets the router pick the right downstream analyser.
     with upload_tempfile(content, file.filename) as tmp_path:
         try:
+            if preset:
+                return _router.run_preset(preset, tmp_path)
             return _router.route(tmp_path, cascade=cascade)
         except RoutingError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/presets")
+async def presets() -> dict[str, Any]:
+    """Return the named preset bundles — name → list of member names."""
+    return {"presets": list_presets()}

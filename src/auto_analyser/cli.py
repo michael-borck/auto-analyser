@@ -3,8 +3,10 @@
 Usage:
   auto-analyser report.pdf
   auto-analyser data.csv --analyser records-analyser
+  auto-analyser essay.docx --preset authentic-essay
   auto-analyser recording.mp3 --json
   auto-analyser detect notebook.ipynb
+  auto-analyser presets
   auto-analyser status
   auto-analyser serve
   auto-analyser manifest
@@ -42,6 +44,9 @@ def main() -> None:
     if argv and argv[0] == "status":
         _cmd_status()
         return
+    if argv and argv[0] == "presets":
+        _cmd_presets()
+        return
 
     # Default command: analyse (bare positional). Also accept an explicit leading
     # `analyse` token — bundle-analyser invokes `auto-analyser analyse <file> --json`.
@@ -51,15 +56,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="auto-analyser",
         description="Route a file to the right analyser and return its analysis",
-        epilog="subcommands: `serve`, `manifest`, `detect`, `status`",
+        epilog="subcommands: `serve`, `manifest`, `detect`, `presets`, `status`",
     )
     parser.add_argument("file", type=Path, help="File to analyse")
-    parser.add_argument("--analyser", help="Force a specific analyser (e.g. code-analyser)")
+    # --analyser and --preset are mutually exclusive — they're different
+    # composition models (single-member route vs named-bundle parallel).
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--analyser", help="Force a specific analyser (e.g. code-analyser)")
+    group.add_argument(
+        "--preset",
+        help="Run a named preset bundle (e.g. authentic-essay). List with `auto-analyser presets`.",
+    )
     parser.add_argument(
         "--no-cascade",
         dest="cascade",
         action="store_false",
-        help="Disable cascade routing (e.g. image-analyser → diagram-analyser when is_diagram=True)",
+        help="Disable cascade routing (no-op when --preset is set — cascade is off inside presets).",
     )
     parser.add_argument("--json", action="store_true", dest="as_json", help="Output raw JSON")
     _cmd_analyse(parser.parse_args(argv))
@@ -71,7 +83,10 @@ def _cmd_analyse(args) -> None:
     router = Router()
 
     try:
-        result = router.route(args.file, analyser_name=args.analyser, cascade=args.cascade)
+        if args.preset:
+            result = router.run_preset(args.preset, args.file)
+        else:
+            result = router.route(args.file, analyser_name=args.analyser, cascade=args.cascade)
     except RoutingError as e:
         if args.as_json:
             print(json.dumps({"error": str(e)}, indent=2, default=str), file=sys.stderr)
@@ -83,6 +98,12 @@ def _cmd_analyse(args) -> None:
         print(json.dumps(result, indent=2, default=str))
         return
 
+    # Preset output: bundle-shaped result
+    if args.preset:
+        _print_preset_summary(result)
+        return
+
+    # Single-route output: original behaviour
     if result.get("warning"):
         print(f"Note: {result['warning']}\n")
 
@@ -96,6 +117,48 @@ def _cmd_analyse(args) -> None:
     print()
     print("Full result (use --json for machine-readable output):")
     _print_summary({k: v for k, v in result.items() if k not in ("routed_to", "warning", "cascade")})
+
+
+def _cmd_presets() -> None:
+    """List available preset bundles + which members each calls."""
+    from .router import list_presets
+
+    presets = list_presets()
+    print("Available presets:\n")
+    for name in sorted(presets):
+        members = presets[name]
+        print(f"  {name}")
+        for m in members:
+            print(f"      → {m}")
+        print()
+    print("Usage: auto-analyser <file> --preset <name>")
+    print("See lens-analysers/docs/ASSESSMENT-MAP.md for the rationale behind each bundle.")
+
+
+def _print_preset_summary(result: dict) -> None:
+    """Pretty-print a preset bundle response."""
+    print(f"Preset: {result['preset']}")
+    print()
+    members = result.get("members", {})
+    n_ok = sum(1 for v in members.values() if isinstance(v, dict) and "error" not in v)
+    n_err = len(members) - n_ok
+    print(f"Members: {n_ok} succeeded, {n_err} skipped/failed")
+    print()
+    for name, data in members.items():
+        if isinstance(data, dict) and "error" in data:
+            print(f"  ✗ {name}: {data['error']}")
+        else:
+            print(f"  ✓ {name}: ok")
+    flags = result.get("flags_across_bundle") or []
+    print()
+    if flags:
+        print(f"Flags across bundle ({len(flags)}):")
+        for f in flags:
+            print(f"  ⚠ {f}")
+    else:
+        print("Flags across bundle: none")
+    print()
+    print("Full bundle results: use --json")
 
 
 def _cmd_detect(args) -> None:

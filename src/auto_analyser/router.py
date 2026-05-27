@@ -26,6 +26,50 @@ _CASCADE_RULES: list[dict] = [
 ]
 
 
+# Named preset bundles — declarative parallel composition.
+# Each preset invokes its members on the same file and aggregates results;
+# members that can't handle the input are reported gracefully (never raise).
+# See lens-analysers/docs/ASSESSMENT-MAP.md for the assessment-design rationale
+# behind each named bundle.
+_PRESETS: dict[str, list[str]] = {
+    "skill-with-evidence": [
+        "code-analyser",
+        "git-analyser",
+        "provenance-analyser",
+    ],
+    "authentic-essay": [
+        "document-analyser",
+        "provenance-analyser",
+        "revision-analyser",
+        "reflection-analyser",
+    ],
+    # design-with-rationale lists both diagram and site — one will apply
+    # to any given input; the other reports a graceful 'unsupported format'.
+    "design-with-rationale": [
+        "diagram-analyser",
+        "site-analyser",
+        "provenance-analyser",
+        "reflection-analyser",
+    ],
+    "multimedia-evidence": [
+        "video-analyser",
+        "speech-analyser",
+        "image-analyser",
+        "provenance-analyser",
+    ],
+    "reflective-practice": [
+        "reflection-analyser",
+        "conversation-analyser",
+        "revision-analyser",
+    ],
+}
+
+
+def list_presets() -> dict[str, list[str]]:
+    """Return a copy of the preset table — name → list of member names."""
+    return {k: list(v) for k, v in _PRESETS.items()}
+
+
 def _get_path(data: dict, path: tuple[str, ...]):
     """Walk a dotted path through nested dicts; return None if any hop is missing."""
     cur = data
@@ -125,6 +169,86 @@ class Router:
                 data["cascade"] = cascade_result
 
         return data
+
+    def run_preset(
+        self,
+        preset_name: str,
+        file_path: "Path | str",
+    ) -> dict[str, Any]:
+        """Invoke every member in a named preset against the same file.
+
+        Returns:
+            {
+              "preset": "<name>",
+              "members": {
+                "<member>": <result dict> OR {"error": "..."},
+                ...
+              },
+              "flags_across_bundle": ["<member>:<flag>", ...]
+            }
+
+        A failed member (unconfigured, unreachable, unsupported format) reports
+        its error in `members[<name>]['error']` rather than failing the bundle.
+        Cascade routing is NOT applied inside presets — presets are explicit
+        composition; cascade is implicit. Mixing them produces surprises.
+
+        Raises:
+            RoutingError: only for input-level problems (unknown preset, file
+                          missing). Per-member failures never raise.
+        """
+        if preset_name not in _PRESETS:
+            raise RoutingError(
+                f"Unknown preset: {preset_name!r}. "
+                f"Available: {sorted(_PRESETS)}"
+            )
+
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+        if not file_path.exists():
+            raise RoutingError(f"File not found: {file_path}")
+        if not file_path.is_file():
+            raise RoutingError(f"Not a file: {file_path}")
+
+        member_results: dict[str, Any] = {}
+        flags_across: list[str] = []
+
+        for member in _PRESETS[preset_name]:
+            cfg = self._config.get(member)
+            if cfg is None:
+                member_results[member] = {"error": "not configured"}
+                continue
+            try:
+                if cfg.type == "cli":
+                    if not cfg.command:
+                        member_results[member] = {"error": "type=cli but no command configured"}
+                        continue
+                    data = self._call_cli(cfg.command, file_path)
+                elif cfg.type == "http":
+                    if not cfg.url:
+                        member_results[member] = {"error": "type=http but no url configured"}
+                        continue
+                    data = self._call_http(cfg.url, file_path)
+                else:
+                    member_results[member] = {"error": f"unknown analyser type: {cfg.type}"}
+                    continue
+                member_results[member] = data
+                # Roll up flags. Members emit them in different shapes:
+                #  - `flags`: list[str]                 (git/spreadsheet/site/etc.)
+                #  - `suspicious_flags`: list[str]      (git-analyser legacy field)
+                #  - `diagram.is_diagram`: bool         (image-analyser cascade hint)
+                # For v1 we only flatten the `flags` list; other shapes can be
+                # added as patterns emerge.
+                if isinstance(data, dict):
+                    for flag in data.get("flags") or []:
+                        flags_across.append(f"{member}:{flag}")
+            except RoutingError as e:
+                member_results[member] = {"error": str(e)}
+
+        return {
+            "preset": preset_name,
+            "members": member_results,
+            "flags_across_bundle": flags_across,
+        }
 
     def _maybe_cascade(
         self,
