@@ -48,7 +48,7 @@ print(result["routed_to"])   # "document-analyser"
 auto-analyser ships with built-in defaults (document-analyser on `localhost:8000`, speech-analyser via CLI, etc.). Override with a YAML config file at `./auto-analyser.yaml` or `~/.config/auto-analyser/config.yaml`:
 
 ```yaml
-lenses:
+analysers:
   document-analyser:
     type: http
     url: http://localhost:8000
