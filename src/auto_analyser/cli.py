@@ -108,15 +108,17 @@ def _cmd_analyse(args) -> None:
         print(f"Note: {result['warning']}\n")
 
     print(f"Routed to:  {result.get('routed_to', 'unknown')}")
-    if "cascade" in result:
-        casc = result["cascade"]
+    cascades = result.get("cascades") or ([result["cascade"]] if "cascade" in result else [])
+    for casc in cascades:
         if "error" in casc:
             print(f"Cascade:    {casc['routed_to']} (triggered by {casc.get('triggered_by','?')}) — failed: {casc['error']}")
         else:
             print(f"Cascade:    {casc['routed_to']} (triggered by {casc.get('triggered_by','?')})")
     print()
     print("Full result (use --json for machine-readable output):")
-    _print_summary({k: v for k, v in result.items() if k not in ("routed_to", "warning", "cascade")})
+    _print_summary(
+        {k: v for k, v in result.items() if k not in ("routed_to", "warning", "cascade", "cascades")}
+    )
 
 
 def _cmd_presets() -> None:

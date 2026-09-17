@@ -16,6 +16,10 @@ class AnalyserConfig:
 @dataclass
 class FamilyConfig:
     analysers: dict[str, AnalyserConfig]
+    # Cascade routing on/off (auto-analyser.yaml: `cascades: {enabled: false}`).
+    # Explicit --analyser/--preset invocations are unaffected; this gates the
+    # implicit second passes (provenance/conversation/reflection heuristics).
+    cascades_enabled: bool = True
 
     def get(self, analyser_name: str) -> AnalyserConfig | None:
         return self.analysers.get(analyser_name)
@@ -76,4 +80,7 @@ def load_config() -> FamilyConfig:
             formats=cfg.get("formats", []),
         )
 
-    return FamilyConfig(analysers=analysers)
+    return FamilyConfig(
+        analysers=analysers,
+        cascades_enabled=bool((raw.get("cascades") or {}).get("enabled", True)),
+    )

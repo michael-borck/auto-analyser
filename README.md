@@ -78,6 +78,27 @@ an analyser can't be reached for its manifest, routing still resolves, so you ge
 clear "is the service running? / is it installed?" message at dispatch instead of a
 misleading "unknown format". See [`docs/adr/0001-manifest-driven-routing.md`](docs/adr/0001-manifest-driven-routing.md).
 
+### Cascade passes (0.8+)
+
+After the primary analysis, matching **cascade rules** can invoke a second member
+on the same file. All matching rules fire (0.7 ran only the first); results land
+under `cascades` (the first also mirrors the legacy singular `cascade` key), each
+block carrying `triggered_by`, `routed_to`, `result` — or `error` (a failed cascade
+never fails the primary).
+
+| Primary | Trigger | Second pass |
+|---|---|---|
+| image-analyser | result says the image is a diagram | diagram-analyser |
+| document-analyser | office format (docx/pptx/xlsx/pdf) | provenance-analyser — the same bytes read as *metadata*: creator app, editing time, revisions |
+| document-analyser | text **looks like a chat** (role markers, folder/name/title clues) | conversation-analyser |
+| document-analyser | text **looks like a journal** (first-person + evaluative cues) | reflection-analyser |
+
+The chat/journal rules are **heuristics into explicit-only members** — tolerance
+first: a false positive costs one extra *labelled* signal set (`triggered_by`
+identifies the heuristic), which the human reader discounts; a false negative just
+means no second pass. Turn all cascade passes off with `cascades: {enabled: false}`
+in the config file.
+
 ## The analyser family
 
 Low-level analysis tools. Each accepts files directly and returns structured JSON. Build your own UI or pipeline on top.

@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from . import heuristics
 from .config import FamilyConfig, load_config
 from .detector import detect
 
@@ -15,13 +16,44 @@ class RoutingError(Exception):
 
 # Cascade rules — when this primary analyser returns a result whose
 # `<field>` path satisfies `<predicate>`, also invoke the cascaded member.
-# v1 has exactly one rule (image-analyser → diagram-analyser); easy to extend.
+# Multiple rules may fire for one file (route() returns them under `cascades`;
+# the first match is mirrored under the legacy singular `cascade` key).
+#
+# The conversation/reflection rules are HEURISTIC cascades into explicit-only
+# members: the predicate inspects the document result (text, path, title line)
+# and fires when a second pass is *plausible*. Their output is labelled
+# (`cascade.triggered_by` → promoted `via` in bundle results) so the human
+# marker can discount a false positive — never a verdict, just a second read.
+# Disable globally with `cascades: {enabled: false}` in auto-analyser.yaml.
 _CASCADE_RULES: list[dict] = [
     {
         "primary": "image-analyser",
         "trigger_path": ("diagram", "is_diagram"),
         "predicate": lambda v: bool(v),
         "cascade_to": "diagram-analyser",
+    },
+    {
+        # Provenance reads the SAME bytes as metadata (creator app, editing
+        # time, revisions) — worth a second pass, but only for the office
+        # formats its extractors support (document-analyser's result carries
+        # the detected format, which gates this rule).
+        "primary": "document-analyser",
+        "trigger_path": (),
+        "predicate": lambda data: str(data.get("format", "")).lower().lstrip(".")
+        in {"docx", "pdf", "pptx", "xlsx"},
+        "cascade_to": "provenance-analyser",
+    },
+    {
+        "primary": "document-analyser",
+        "trigger_path": (),
+        "predicate": lambda data: heuristics.chat_likeness(data),
+        "cascade_to": "conversation-analyser",
+    },
+    {
+        "primary": "document-analyser",
+        "trigger_path": (),
+        "predicate": lambda data: heuristics.journal_likeness(data),
+        "cascade_to": "reflection-analyser",
     },
 ]
 
@@ -163,10 +195,14 @@ class Router:
         if warning:
             data["warning"] = warning
 
-        if (cascade if cascade is not None else self._cascade_default):
-            cascade_result = self._maybe_cascade(analyser_name, data, file_path)
-            if cascade_result is not None:
-                data["cascade"] = cascade_result
+        cascade_on = cascade if cascade is not None else (
+            self._cascade_default and self._config.cascades_enabled
+        )
+        if cascade_on:
+            blocks = self._matching_cascades(analyser_name, data, file_path)
+            if blocks:
+                data["cascades"] = blocks
+                data["cascade"] = blocks[0]  # legacy singular key (first match)
 
         return data
 
@@ -250,17 +286,19 @@ class Router:
             "flags_across_bundle": flags_across,
         }
 
-    def _maybe_cascade(
+    def _matching_cascades(
         self,
         primary_name: str,
         primary_data: dict[str, Any],
         file_path: Path,
-    ) -> dict[str, Any] | None:
-        """Apply the first matching cascade rule. Returns the cascade block, or None.
+    ) -> list[dict[str, Any]]:
+        """Apply every matching cascade rule. Returns the cascade blocks.
 
-        Never raises — a failed cascade is reported, not propagated, so the
-        primary result is always preserved.
+        Never raises — a failed cascade is reported in its block, not
+        propagated, so the primary result is always preserved. All rules whose
+        primary and trigger match fire (previously first-match-only).
         """
+        blocks: list[dict[str, Any]] = []
         for rule in _CASCADE_RULES:
             if rule["primary"] != primary_name:
                 continue
@@ -269,30 +307,34 @@ class Router:
                 continue
             cascade_to = rule["cascade_to"]
             block: dict[str, Any] = {
-                "triggered_by": f"{rule['primary']}." + ".".join(rule["trigger_path"]),
+                "triggered_by": f"{rule['primary']}."
+                + (".".join(rule["trigger_path"]) or "heuristic"),
                 "routed_to": cascade_to,
             }
             target_cfg = self._config.get(cascade_to)
             if target_cfg is None:
                 block["error"] = f"cascade target {cascade_to!r} is not configured"
-                return block
+                blocks.append(block)
+                continue
             try:
                 if target_cfg.type == "cli":
                     if not target_cfg.command:
                         block["error"] = f"{cascade_to} has type=cli but no command configured"
-                        return block
+                        blocks.append(block)
+                        continue
                     block["result"] = self._call_cli(target_cfg.command, file_path)
                 elif target_cfg.type == "http":
                     if not target_cfg.url:
                         block["error"] = f"{cascade_to} has type=http but no url configured"
-                        return block
+                        blocks.append(block)
+                        continue
                     block["result"] = self._call_http(target_cfg.url, file_path)
                 else:
                     block["error"] = f"unknown analyser type: {target_cfg.type}"
             except RoutingError as e:
                 block["error"] = str(e)
-            return block
-        return None
+            blocks.append(block)
+        return blocks
 
     def _call_cli(self, command: str, file_path: Path) -> dict[str, Any]:
         try:
